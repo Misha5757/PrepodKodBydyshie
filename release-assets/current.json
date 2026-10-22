@@ -1,1 +1,4 @@
-{"version":"1.0.0","product":"teacher"}
+{
+  "product": "teacher",
+  "version": "1.0.0"
+}
