@@ -1,0 +1,56 @@
+name: Publish signed application update
+on:
+  push:
+    branches: [main]
+    paths: ['release-assets/**']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: publish-application-update
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish prepared signed assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="repos/$GITHUB_REPOSITORY/contents/release-assets"
+          gh api "$base/current.json?ref=$GITHUB_SHA" -H 'Accept: application/vnd.github.raw+json' > current.json
+          python3 - <<'PY'
+          import json,re
+          x=json.load(open('current.json',encoding='utf-8'))
+          assert x['product'] in ('teacher','student')
+          assert re.fullmatch(r'(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(\.(0|[1-9][0-9]*))?',x['version'])
+          PY
+          product=$(python3 -c "import json;print(json.load(open('current.json'))['product'])")
+          version=$(python3 -c "import json;print(json.load(open('current.json'))['version'])")
+          tag="v$version"
+          for asset in "$product-update.zip" "$product-update.json"; do
+            gh api "$base/$asset?ref=$GITHUB_SHA" -H 'Accept: application/vnd.github.raw+json' > "$asset"
+          done
+          python3 - "$product" "$version" <<'PY'
+          import base64,hashlib,json,sys
+          role,version=sys.argv[1:]
+          wrapper=json.load(open(role+'-update.json'))
+          payload=json.loads(base64.b64decode(wrapper['payload']))
+          data=open(role+'-update.zip','rb').read()
+          assert payload['product']==role and payload['version']==version
+          assert hashlib.sha256(data).hexdigest()==payload['package']['sha256']
+          assert len(data)==payload['package']['size']
+          open('notes.txt','w',encoding='utf-8').write(payload.get('notes',''))
+          PY
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft > existing.json 2>/dev/null; then
+            if ! python3 -c "import json,sys;sys.exit(0 if json.load(open('existing.json'))['isDraft'] else 1)"; then
+              echo 'Version is already published; leaving immutable release unchanged.'
+              exit 0
+            fi
+          else
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "Код будущего · $version" --notes-file notes.txt
+          fi
+          gh release upload "$tag" "$product-update.zip" "$product-update.json" --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
