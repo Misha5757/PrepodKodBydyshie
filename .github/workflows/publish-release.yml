@@ -20,7 +20,11 @@ jobs:
         run: |
           set -euo pipefail
           base="repos/$GITHUB_REPOSITORY/contents/release-assets"
-          gh api "$base/current.json?ref=$GITHUB_SHA" -H 'Accept: application/vnd.github.raw+json' > current.json
+          api="${GITHUB_API_URL:-https://api.github.com}/$base"
+          curl --fail --silent --show-error --location --retry 3 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github.raw' \
+            "$api/current.json?ref=$GITHUB_SHA" > current.json
           python3 - <<'PY'
           import json,re
           x=json.load(open('current.json',encoding='utf-8'))
@@ -31,7 +35,10 @@ jobs:
           version=$(python3 -c "import json;print(json.load(open('current.json'))['version'])")
           tag="v$version"
           for asset in "$product-update.zip" "$product-update.json"; do
-            gh api "$base/$asset?ref=$GITHUB_SHA" -H 'Accept: application/vnd.github.raw+json' > "$asset"
+            curl --fail --silent --show-error --location --retry 3 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github.raw' \
+              "$api/$asset?ref=$GITHUB_SHA" --output "$asset"
           done
           python3 - "$product" "$version" <<'PY'
           import base64,hashlib,json,sys
@@ -54,3 +61,4 @@ jobs:
           fi
           gh release upload "$tag" "$product-update.zip" "$product-update.json" --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
