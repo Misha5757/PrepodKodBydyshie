@@ -53,8 +53,7 @@ jobs:
           PY
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json isDraft > existing.json 2>/dev/null; then
             if ! python3 -c "import json,sys;sys.exit(0 if json.load(open('existing.json'))['isDraft'] else 1)"; then
-              echo 'Version is already published; leaving immutable release unchanged.'
-              exit 0
+              echo 'Version is already published; adding or refreshing the signed assets only.'
             fi
           else
             gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --draft --title "Код будущего · $version" --notes-file notes.txt
