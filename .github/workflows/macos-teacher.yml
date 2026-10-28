@@ -38,7 +38,7 @@ jobs:
       matrix:
         include:
           - name: Apple Silicon
-            runner: macos-latest
+            runner: macos-15-intel
             arch: arm64
           - name: Intel
             runner: macos-15-intel
