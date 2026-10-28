@@ -1,0 +1,62 @@
+{
+  "name": "code-future-teacher-macos",
+  "version": "1.0.0",
+  "description": "Преподавательская программа «Код будущего» для macOS",
+  "main": "src/main.cjs",
+  "private": true,
+  "packageManager": "pnpm@11.25.0",
+  "author": "Код будущего",
+  "license": "UNLICENSED",
+  "scripts": {
+    "sync-ui": "node scripts/sync-renderer.mjs",
+    "prepare-electron": "install-electron",
+    "start": "pnpm run sync-ui && pnpm run prepare-electron && electron .",
+    "pack:mac:arm64": "pnpm run sync-ui && electron-builder --mac dir --arm64",
+    "dist:mac:arm64": "pnpm run sync-ui && electron-builder --mac dmg zip --arm64",
+    "dist:mac:x64": "pnpm run sync-ui && electron-builder --mac dmg zip --x64"
+  },
+  "devDependencies": {
+    "electron": "45.1.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "ru.codefuture.teacher",
+    "productName": "Код будущего",
+    "artifactName": "Код-будущего-Преподаватель-${version}-macOS-${arch}.${ext}",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.education",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false,
+      "notarize": false,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "title": "Код будущего — Преподаватель",
+      "contents": [
+        {
+          "x": 140,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ]
+    }
+  }
+}

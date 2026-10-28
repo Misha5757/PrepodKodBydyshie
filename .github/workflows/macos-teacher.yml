@@ -1,0 +1,108 @@
+name: macOS · Преподаватель
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Версия, например 1.10.1 или 1.10.1-beta.1'
+        required: true
+        default: '1.0.0'
+        type: string
+      publish:
+        description: 'Добавить DMG и ZIP в GitHub Releases'
+        required: true
+        default: true
+        type: boolean
+  push:
+    branches:
+      - main
+    paths:
+      - 'macOS/**'
+      - 'Приложение/Исходники/ui.html'
+      - 'Приложение/Исходники/updates.js'
+      - 'Приложение/Исходники/updates.css'
+      - '.github/workflows/macos-teacher.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: macos-teacher-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Apple Silicon
+            runner: macos-latest
+            arch: arm64
+          - name: Intel
+            runner: macos-15-intel
+            arch: x64
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: macOS
+    steps:
+      - name: Загрузить исходники
+        uses: actions/checkout@v7
+
+      - name: Подготовить Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          package-manager-cache: false
+
+      - name: Подготовить pnpm
+        run: corepack enable
+
+      - name: Установить версию
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          APP_VERSION: ${{ inputs.version }}
+        run: |
+          node -e "const fs=require('fs');const p=require('./package.json');if(!/^\\d+\\.\\d+\\.\\d+(?:-[0-9A-Za-z.-]+)?$/.test(process.env.APP_VERSION))throw new Error('Версия должна иметь вид 1.10.1 или 1.10.1-beta.1');p.version=process.env.APP_VERSION;fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"
+
+      - name: Установить зависимости
+        run: pnpm install --frozen-lockfile
+
+      - name: Собрать DMG и ZIP
+        run: pnpm run dist:mac:${{ matrix.arch }}
+
+      - name: Сохранить готовую сборку
+        uses: actions/upload-artifact@v7
+        with:
+          name: teacher-macos-${{ matrix.arch }}
+          path: |
+            macOS/dist/*.dmg
+            macOS/dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Скачать обе сборки
+        uses: actions/download-artifact@v8
+        with:
+          pattern: teacher-macos-*
+          path: release-files
+          merge-multiple: true
+
+      - name: Создать или обновить релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+          APP_VERSION: ${{ inputs.version }}
+        run: |
+          TAG="v${APP_VERSION}"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Код будущего ${APP_VERSION}" --notes "macOS: преподавательская программа. В первый раз macOS может потребовать «Открыть всё равно» в Конфиденциальность и безопасность."
+          fi
+          gh release upload "$TAG" release-files/* --repo "$GITHUB_REPOSITORY" --clobber
