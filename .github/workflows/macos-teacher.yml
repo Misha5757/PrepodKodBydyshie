@@ -70,22 +70,21 @@ jobs:
       - name: Установить зависимости
         run: pnpm install --frozen-lockfile
 
-      - name: Собрать DMG и ZIP
+      - name: Собрать DMG
         run: pnpm run dist:mac:${{ matrix.arch }}
 
       - name: Сохранить готовую сборку
         uses: actions/upload-artifact@v7
         with:
           name: teacher-macos-${{ matrix.arch }}
-          path: |
-            macOS/dist/*.dmg
-            macOS/dist/*.zip
+          path: macOS/dist/*.dmg
           if-no-files-found: error
+          compression-level: 0
           retention-days: 14
 
   release:
     name: GitHub Release
-    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish)
     needs: build
     runs-on: ubuntu-latest
     steps:
@@ -99,7 +98,7 @@ jobs:
       - name: Создать или обновить релиз
         env:
           GH_TOKEN: ${{ github.token }}
-          APP_VERSION: ${{ inputs.version }}
+          APP_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '1.1.10-beta' }}
         run: |
           TAG="v${APP_VERSION}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
