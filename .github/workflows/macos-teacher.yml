@@ -101,7 +101,7 @@ jobs:
           APP_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || '1.1.10-beta' }}
         run: |
           TAG="v${APP_VERSION}"
-          if ! gh release view "$TAG" >/dev/null 2>&1; then
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "Код будущего ${APP_VERSION}" --notes "macOS: преподавательская программа. В первый раз macOS может потребовать «Открыть всё равно» в Конфиденциальность и безопасность."
           fi
           gh release upload "$TAG" release-files/* --repo "$GITHUB_REPOSITORY" --clobber
